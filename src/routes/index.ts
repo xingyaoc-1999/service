@@ -2,7 +2,6 @@ import { Express, Request, response, Response, Router } from "express";
 import fs from "fs";
 import { pipeline } from "stream";
 import path from "path";
-import util from "util";
 import multiParty from "multiparty";
 interface RouterConfig {
   path: string;
@@ -25,30 +24,23 @@ const routes = (app: Express) => {
   });
 
   app.get("/status", (req, res) => {
-    const fileId = req.body.uid;
-    const upload = uploads[fileId];
+    const fileId = req.headers["x-file-id"];
+    const upload = uploads[Number(fileId)];
     if (!upload) {
-      res.status(404).send("can not find that");
+      res.send("0");
       return;
     }
     res.status(200).send(upload.bytesReceived);
   });
 
-  app.post("/file", (req, res) => {
-    const form = new multiParty.Form();
-    form.parse(req, (err, fields, files) => {
-      Object.keys(files).forEach(function (name) {
-        console.log("got file named " + name);
-      });
-    });
-    res.end();
-  });
   app.post("/upload", (req, res) => {
-    const fileId = req.body.uid;
-    let startByte = Number(req.headers["x-start-byte"]);
-    let filePath = path.join("/temp", fileId);
+    const fileId = req.headers["x-file-id"];
 
-    let upload = uploads[fileId] ?? {};
+    let startByte = Number(req.headers["x-start-byte"]);
+
+    let filePath = path.join(__dirname, `../../temp/${fileId}`);
+
+    let upload = uploads[Number(fileId)] ?? {};
 
     let fileStream: fs.WriteStream = null!;
     if (!startByte) {
@@ -56,7 +48,6 @@ const routes = (app: Express) => {
       fileStream = fs.createWriteStream(filePath, {
         flags: "w",
       });
-      return;
     }
     if (upload.bytesReceived !== startByte) {
       res.writeHead(400, "wrong start byte").send(upload.bytesReceived);
@@ -67,13 +58,14 @@ const routes = (app: Express) => {
     });
 
     req.on("data", (data) => {
+      console.log(data);
       upload.bytesReceived += data.length;
     });
     req.pipe(fileStream);
-
     fileStream.on("close", () => {
       if (upload.bytesReceived === Number(req.headers["x-file-size"])) {
-        delete uploads[fileId];
+        delete uploads[Number(fileId)];
+        res.send("success " + upload.bytesReceived);
         return;
       }
       res.send();
