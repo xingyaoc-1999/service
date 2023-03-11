@@ -24,8 +24,8 @@ const routes = (app: Express) => {
   });
 
   app.get("/status", (req, res) => {
-    const fileId = req.headers["x-file-id"];
-    const upload = uploads[Number(fileId)];
+    const fileId = req.headers["x-file-id"] as any;
+    const upload = uploads[fileId];
     if (!upload) {
       res.send("0");
       return;
@@ -40,7 +40,7 @@ const routes = (app: Express) => {
 
     let filePath = path.join(__dirname, `../../temp/${fileId}`);
 
-    let upload = uploads[Number(fileId)] ?? {};
+    let upload = uploads[fileId as any] ?? {};
 
     let fileStream: fs.WriteStream = null!;
     if (!startByte) {
@@ -64,8 +64,10 @@ const routes = (app: Express) => {
     req.pipe(fileStream);
     fileStream.on("close", () => {
       if (upload.bytesReceived === Number(req.headers["x-file-size"])) {
-        delete uploads[Number(fileId)];
-        res.send("success " + upload.bytesReceived);
+        // BUG
+        delete uploads[fileId as any]; //类型“string[]”不能作为索引类型使用。ts(2538)
+
+        res.send({ url: filePath });
         return;
       }
       res.send();
